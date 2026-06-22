@@ -14,7 +14,8 @@ import routeRoutes from "./routes/routeRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
 import studentRoutes from "./routes/studentRoutes.js";
 import parentRoutes from "./routes/parentRoutes.js";
-
+import tripRoutes from "./routes/tripRoutes.js";
+import adminRoutes from "./routes/adminRoutes.js";
 dotenv.config();
 
 // ---------------- CONNECT DATABASE ----------------
@@ -43,6 +44,8 @@ app.use("/api/parents", parentRoutes);
 
 app.use("/api/students", studentRoutes);
 
+app.use("/api/trips", tripRoutes);
+app.use("/api/admin", adminRoutes);
 // ---------------- HTTP SERVER ----------------
 
 const server = http.createServer(app);

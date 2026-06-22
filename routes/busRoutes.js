@@ -37,11 +37,9 @@ router.post("/", authMiddleware, async (req, res) => {
   }
 });
 
-
-
-/* UPDATE BUS */
-
 router.put("/update-location", authMiddleware, async (req, res) => {
+  console.log("req.driver =", req.driver);
+console.log("req.body =", req.body);
   try {
     const driver = await Driver.findById(req.driver.id);
 
@@ -69,6 +67,7 @@ const io = req.app.get("io");
 
 console.log("📡 Emitting busLocationUpdated:", bus);
 
+
 io.emit("busLocationUpdated", bus);
 
     res.json({
@@ -81,6 +80,38 @@ io.emit("busLocationUpdated", bus);
     });
   }
 });
+
+
+
+
+router.put("/:id", authMiddleware, async (req, res) => {
+  try {
+    const { busNo, route, status } = req.body;
+
+    const bus = await Bus.findById(req.params.id);
+
+    if (!bus) {
+      return res.status(404).json({
+        message: "Bus not found",
+      });
+    }
+
+    bus.busNo = busNo;
+    bus.route = route;
+    bus.status = status;
+
+    await bus.save();
+
+    res.json(bus);
+  } catch (error) {
+    res.status(500).json({
+      message: error.message,
+    });
+  }
+});
+
+
+/* UPDATE BUS */
 
 
 

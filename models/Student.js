@@ -40,6 +40,15 @@ assignedBus: {
       type: String,
       default: "",
     },
+    pickupLatitude: {
+  type: Number,
+  default: 0,
+},
+
+pickupLongitude: {
+  type: Number,
+  default: 0,
+},
 
     // Link to Parent model
     parentId: {
