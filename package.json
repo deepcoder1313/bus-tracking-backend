@@ -33,6 +33,7 @@
     "es-object-atoms": "^1.1.2",
     "escape-html": "^1.0.3",
     "etag": "^1.8.1",
+    "expo-server-sdk": "^6.1.0",
     "express": "^5.2.1",
     "fill-range": "^7.1.1",
     "finalhandler": "^2.1.1",
@@ -72,6 +73,7 @@
     "mquery": "^6.0.0",
     "ms": "^2.1.3",
     "negotiator": "^1.0.0",
+    "node-fetch": "^3.3.2",
     "nodemon": "^3.1.14",
     "normalize-path": "^3.0.0",
     "object-assign": "^4.1.1",
@@ -117,7 +119,7 @@
     "wrappy": "^1.0.2"
   },
   "scripts": {
-    "start": "node server.js",
+    "start": "node --openssl-legacy-provider server.js",
     "dev": "nodemon server.js"
   },
   "keywords": [],

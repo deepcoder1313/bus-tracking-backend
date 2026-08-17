@@ -27,6 +27,20 @@ const tripSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+
+tripType: {
+  type: String,
+  enum: ["morning", "return"],
+  default: "morning",
+},
+
+status: {
+  type: String,
+  enum: ["active", "completed"],
+  default: "active",
+},
+
+
   },
   {
     timestamps: true,

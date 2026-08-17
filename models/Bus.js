@@ -18,6 +18,7 @@ const busSchema = new mongoose.Schema(
       default: "Active",
     },
 
+    // 📍 Current Position
     latitude: {
       type: Number,
       default: 0,
@@ -27,11 +28,46 @@ const busSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+
+    // 🚍 GPS Speed (km/h)
+    speed: {
+      type: Number,
+      default: 0,
+    },
+
+    // 🧭 Direction (0–360°)
+    heading: {
+      type: Number,
+      default: 0,
+    },
+
+    // 🎯 GPS Accuracy (meters)
+    accuracy: {
+      type: Number,
+      default: 0,
+    },
+
+    // 🕒 Driver GPS timestamp
+    gpsTimestamp: {
+      type: Number,
+      default: 0,
+    },
+
+    // 🕒 Last valid update saved on server
+    lastGpsUpdate: {
+      type: Date,
+      default: Date.now,
+    },
+
+    // 📶 Online status
+    isOnline: {
+      type: Boolean,
+      default: false,
+    }
   },
   {
     timestamps: true,
   }
 );
-const Bus = mongoose.model("Bus", busSchema);
 
-export default Bus;
+export default mongoose.model("Bus", busSchema);

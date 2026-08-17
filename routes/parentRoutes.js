@@ -2,7 +2,8 @@ import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import Parent from "../models/Parent.js";
-
+import parentAuth from "../middleware/parentAuth.js";
+import { sendPushNotification } from "../services/notificationService.js";
 const router = express.Router();
 
 /* ===========================
@@ -58,11 +59,14 @@ router.post("/", async (req, res) => {
 }
 });
 
+
+
 /* ===========================
    PARENT LOGIN
 =========================== */
 
 router.post("/login", async (req, res) => {
+
   try {
     console.log("📥 Body:", req.body);
 
@@ -121,6 +125,98 @@ const parent = await Parent.findOne({
     });
   }
 });
+
+router.post("/test-push", parentAuth, async (req, res) => {
+  try {
+    const parent = await Parent.findById(req.parent.id);
+
+    if (!parent) {
+      return res.status(404).json({
+        message: "Parent not found",
+      });
+    }
+
+    if (!parent.expoPushToken) {
+      return res.status(400).json({
+        message: "Parent has no Expo push token",
+      });
+    }
+
+    console.log("📱 TEST PUSH TOKEN:", parent.expoPushToken);
+
+    await sendPushNotification(
+      parent.expoPushToken,
+      "🚌 Test Notification",
+      "Background push notifications are working!",
+      {
+        type: "test",
+      }
+    );
+
+    res.json({
+      message: "Test notification sent",
+    });
+
+  } catch (error) {
+    console.log("❌ Test push error:", error);
+
+    res.status(500).json({
+      message: error.message,
+    });
+  }
+});
+
+
+
+
+
+
+ router.put(
+  "/push-token",
+  parentAuth,
+  async (req, res) => {
+      console.log("🔥 PUSH TOKEN API CALLED");
+  console.log("Authorization:", req.headers.authorization);
+  console.log("Body:", req.body);
+
+
+    try {
+
+      const { expoPushToken } = req.body;
+       console.log("Received Token:", expoPushToken);
+
+      const parent = await Parent.findById(
+        req.parent.id
+      );
+
+      console.log("Parent:", parent?.name);
+
+
+      if (!parent) {
+        return res.status(404).json({
+          message: "Parent not found",
+        });
+      }
+
+      parent.expoPushToken = expoPushToken;
+
+      await parent.save();
+
+      res.json({
+        message: "Push Token Saved",
+      });
+
+    } catch (error) {
+
+      res.status(500).json({
+        message: error.message,
+      });
+
+    }
+
+  }
+);
+
 /* ===========================
    UPDATE PARENT
 =========================== */

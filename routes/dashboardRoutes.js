@@ -4,6 +4,7 @@ import Driver from "../models/Driver.js";
 import Student from "../models/Student.js";
 import Parent from "../models/Parent.js";
 import Trip from "../models/Trip.js";
+import Route from "../models/Route.js";
 
 const router = express.Router();
 
@@ -19,6 +20,9 @@ router.get("/stats", async (req, res) => {
     const activeBuses = await Bus.countDocuments({
       status: "Active",
     });
+        const offlineBuses = await Bus.countDocuments({
+      status: "Offline",
+    });
 
     res.json({
       totalBuses,
@@ -27,6 +31,7 @@ router.get("/stats", async (req, res) => {
       totalParents,
       totalTrips,
       activeBuses,
+      offlineBuses,
     });
   } catch (error) {
     res.status(500).json({

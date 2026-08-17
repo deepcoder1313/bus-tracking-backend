@@ -28,6 +28,12 @@ const parentSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Student",
     },
+
+    // ✅ NEW
+    expoPushToken: {
+      type: String,
+      default: "",
+    },
   },
   {
     timestamps: true,
@@ -42,4 +48,5 @@ parentSchema.pre("save", async function () {
 
   this.password = await bcrypt.hash(this.password, 10);
 });
+
 export default mongoose.model("Parent", parentSchema);

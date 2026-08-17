@@ -55,7 +55,27 @@ pickupLongitude: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Parent",
       default: null,
-    },
+     },
+   
+        pickupNotificationSent: {
+  type: Boolean,
+  default: false,
+},
+
+parentId: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "Parent",
+  default: null,
+},
+schoolNotificationSent: {
+  type: Boolean,
+  default: false,
+},
+pickupNotificationSent: {
+  type: Boolean,
+  default: false,
+},
+
   },
   {
     timestamps: true,
