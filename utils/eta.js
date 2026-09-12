@@ -1,14 +1,26 @@
 export function getETA(distance, speedKmH) {
+  // Invalid distance
+  if (!Number.isFinite(distance) || distance < 0) {
+    return null;
+  }
 
-    if (speedKmH <= 0)
-        return null;
+  // Bus is already at pickup point
+  if (distance <= 50) {
+    return 0;
+  }
 
-    const speedMetersSecond =
-        speedKmH / 3.6;
+  // Convert meters to km
+  const distanceKm = distance / 1000;
 
-    const seconds =
-        distance / speedMetersSecond;
+  // Use GPS speed if reliable
+  // Otherwise use a reasonable city-bus fallback speed
+  const effectiveSpeed =
+    Number.isFinite(speedKmH) && speedKmH >= 10
+      ? speedKmH
+      : 25;
 
-    return Math.ceil(seconds / 60);
+  const hours = distanceKm / effectiveSpeed;
+  const minutes = Math.ceil(hours * 60);
 
+  return Math.max(1, minutes);
 }

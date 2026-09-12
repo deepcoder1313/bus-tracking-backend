@@ -32,50 +32,47 @@ const studentSchema = new mongoose.Schema(
       required: true,
     },
 
-assignedBus: {
-  type: String,
-  default: "",
-},
+    assignedBus: {
+      type: String,
+      default: "",
+    },
+
     pickupPoint: {
       type: String,
       default: "",
     },
+
     pickupLatitude: {
-  type: Number,
-  default: 0,
-},
+      type: Number,
+      default: 0,
+    },
 
-pickupLongitude: {
-  type: Number,
-  default: 0,
-},
+    pickupLongitude: {
+      type: Number,
+      default: 0,
+    },
 
-    // Link to Parent model
     parentId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Parent",
       default: null,
-     },
-   
-        pickupNotificationSent: {
-  type: Boolean,
-  default: false,
-},
+    },
 
-parentId: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: "Parent",
-  default: null,
-},
-schoolNotificationSent: {
-  type: Boolean,
-  default: false,
-},
-pickupNotificationSent: {
-  type: Boolean,
-  default: false,
-},
+    // Notification flags
+    pickupNotificationSent: {
+      type: Boolean,
+      default: false,
+    },
 
+    pickupArrivedNotificationSent: {
+      type: Boolean,
+      default: false,
+    },
+
+    schoolNotificationSent: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

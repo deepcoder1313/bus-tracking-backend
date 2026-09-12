@@ -19,7 +19,7 @@ const stopSchema = new mongoose.Schema({
   order: {
     type: Number,
     default: 0,
-  }
+  },
 });
 
 const routeSchema = new mongoose.Schema(
@@ -54,6 +54,11 @@ const routeSchema = new mongoose.Schema(
       default: 0,
     },
 
+    schoolName: {
+      type: String,
+      default: "",
+    },
+
     schoolLatitude: {
       type: Number,
       default: 0,
@@ -63,28 +68,9 @@ const routeSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
-    
 
     stops: [stopSchema],
-
-
-    schoolName: {
-  type: String,
-  default: "",
-},
-
-schoolLatitude: {
-  type: Number,
-  default: 0,
-},
-
-schoolLongitude: {
-  type: Number,
-  default: 0,
-},
   },
-
-  
   {
     timestamps: true,
   }

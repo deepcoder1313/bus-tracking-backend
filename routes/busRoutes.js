@@ -1,12 +1,13 @@
+// routes/busRoutes.js
 import express from "express";
 import authMiddleware from "../middleware/authMiddleware.js";
-import Bus from "../models/Bus.js";
+import Bus    from "../models/Bus.js";
 import Driver from "../models/Driver.js";
 import Student from "../models/Student.js";
-import Parent from "../models/Parent.js";
-import Route from "../models/Route.js";
+import Parent  from "../models/Parent.js";
+import Route   from "../models/Route.js";
 import { getDistance } from "../utils/distance.js";
-import { getETA } from "../utils/eta.js";
+import { getETA }      from "../utils/eta.js";
 import { sendPushNotification } from "../services/notificationService.js";
 
 const router = express.Router();
@@ -50,11 +51,7 @@ router.post("/", authMiddleware, async (req, res) => {
 
 /* UPDATE LOCATION — called by Driver App every 3-4 seconds */
 router.put("/update-location", authMiddleware, async (req, res) => {
-  console.log("req.driver =", req.driver);
-  console.log("req.body =", req.body);
-
   try {
-    // ── 1. Find driver and bus ──────────────────────────
     const driver = await Driver.findById(req.driver.id);
     if (!driver) return res.status(404).json({ message: "Driver not found" });
 
@@ -63,44 +60,39 @@ router.put("/update-location", authMiddleware, async (req, res) => {
 
     const { latitude, longitude, speed, heading, accuracy, timestamp } = req.body;
 
-    // ── 2. Filter bad GPS ───────────────────────────────
+    // ── Filter bad GPS ──────────────────────────────────
     if (accuracy > 50) {
       return res.status(200).json({ message: "Ignored - poor GPS accuracy" });
     }
-
     if (bus.gpsTimestamp && timestamp < bus.gpsTimestamp) {
       return res.status(200).json({ message: "Ignored - old GPS packet" });
     }
 
-    const distance = getDistanceInMeters(
+    const moveDist = getDistanceInMeters(
       bus.latitude, bus.longitude, latitude, longitude
     );
     const timeDiff = (timestamp - (bus.gpsTimestamp || timestamp)) / 1000;
-    const calculatedSpeed = timeDiff > 0 ? (distance / timeDiff) * 3.6 : 0;
+    const calcSpeed = timeDiff > 0 ? (moveDist / timeDiff) * 3.6 : 0;
 
-    if (calculatedSpeed > 120) {
-      console.log("❌ Impossible GPS jump - ignored");
+    if (calcSpeed > 120) {
+      console.log("❌ Impossible GPS jump ignored");
       return res.status(200).json({ message: "Ignored - impossible GPS jump" });
     }
 
-    // ── 3. Update bus in MongoDB ────────────────────────
-    bus.latitude     = latitude;
-    bus.longitude    = longitude;
-    bus.speed        = Math.round((speed ?? 0) * 3.6);
-    bus.heading      = heading ?? 0;
-    bus.accuracy     = accuracy ?? 0;
-    bus.gpsTimestamp = timestamp;
+    // ── Update bus ──────────────────────────────────────
+    bus.latitude      = latitude;
+    bus.longitude     = longitude;
+    bus.speed         = Math.round((speed ?? 0) * 3.6);
+    bus.heading       = heading ?? 0;
+    bus.accuracy      = accuracy ?? 0;
+    bus.gpsTimestamp  = timestamp;
     bus.lastGpsUpdate = new Date();
-    bus.isOnline     = true;
-
+    bus.isOnline      = true;
     await bus.save();
 
-    // ── 4. ✅ EMIT TO ALL CLIENTS — always, unconditionally ──
+    // ── ✅ EMIT — always, unconditionally, right after save ──
     const io = req.app.get("io");
-
-    if (!io) {
-      console.log("❌ io not found on app");
-    } else {
+    if (io) {
       io.emit("busLocationUpdated", {
         _id:       bus._id,
         busNo:     bus.busNo,
@@ -110,67 +102,118 @@ router.put("/update-location", authMiddleware, async (req, res) => {
         heading:   bus.heading,
         status:    bus.status,
       });
-      console.log(`📡 busLocationUpdated emitted to ${io.sockets.sockets.size} clients`);
+      console.log(`📡 busLocationUpdated → ${io.sockets.sockets.size} clients`);
     }
 
-    // ── 5. Notifications (separate, non-blocking) ───────
+    res.json({ message: "Location updated", bus });
+
+    // ── Notifications (non-blocking, after response) ────
     setImmediate(async () => {
       try {
-        const route = await Route.findOne({ routeName: bus.route });
+        const route    = await Route.findOne({ routeName: bus.route });
         const students = await Student.find({ assignedBus: bus.busNo });
+        const notifiedParents = new Set();
 
         for (const student of students) {
           if (!student.pickupLatitude || !student.pickupLongitude) continue;
 
+          const parent = await Parent.findById(student.parentId);
+          if (!parent?.expoPushToken) continue;
+
+          const parentKey  = parent._id.toString();
           const pickupDist = getDistance(
             latitude, longitude,
             student.pickupLatitude, student.pickupLongitude
           );
-          const eta = getETA(pickupDist, bus.speed);
+const eta = getETA(pickupDist, bus.speed);
 
-          console.log(`📍 ${student.name}: ${Math.round(pickupDist)}m, ETA: ${eta}min`);
+let etaText;
 
-          const parent = await Parent.findById(student.parentId);
-          if (!parent?.expoPushToken) continue;
+if (pickupDist <= 50) {
+  etaText = "arriving now";
+} else if (eta !== null) {
+  etaText = `about ${eta} min`;
+} else {
+  etaText = "ETA unavailable";
+}
 
-          // School arrival notification
-          if (route?.schoolLatitude && route?.schoolLongitude) {
+console.log("📍 PICKUP ETA:", {
+  student: student.name,
+  distance: Math.round(pickupDist),
+  speed: bus.speed,
+  eta,
+  etaText,
+});
+
+          // ✅ 2. Bus Arriving — within 500m, not already sent
+          // ✅ 7. Prevent duplicates with pickupNotificationSent flag
+          if (
+            pickupDist <= 500 &&
+            !student.pickupNotificationSent &&
+            !notifiedParents.has(parentKey + "_arriving")
+          ) {
+            notifiedParents.add(parentKey + "_arriving");
+       await sendPushNotification(
+  parent.expoPushToken,
+  "📍 Bus Arriving",
+  `${student.name}'s bus is ${Math.round(pickupDist)}m away — ${etaText}. Please be ready.`,
+  {
+    type: "bus_arriving",
+    studentId: student._id,
+  }
+);
+            student.pickupNotificationSent = true;
+            await student.save();
+            console.log(`✅ Arriving notification → ${parent.name}`);
+          }
+
+          // Bus at pickup — within 100m
+          if (
+            pickupDist <= 100 &&
+            !student.pickupArrivedNotificationSent &&
+            !notifiedParents.has(parentKey + "_arrived")
+          ) {
+            notifiedParents.add(parentKey + "_arrived");
+            await sendPushNotification(
+              parent.expoPushToken,
+              "🚌 Bus is Here!",
+              `Bus is at ${student.pickupPoint || "your pickup point"}. Board now!`,
+              { type: "bus_arrived", screen: "map", studentId: student._id.toString() }
+            );
+            student.pickupArrivedNotificationSent = true;
+            await student.save();
+            console.log(`✅ Arrived notification → ${parent.name}`);
+          }
+
+          // ✅ 3. Reached School — within 100m of school
+          if (
+            route?.schoolLatitude &&
+            route?.schoolLongitude &&
+            !student.schoolNotificationSent &&
+            !notifiedParents.has(parentKey + "_school")
+          ) {
             const schoolDist = getDistance(
               latitude, longitude,
               route.schoolLatitude, route.schoolLongitude
             );
-            if (schoolDist <= 100 && !student.schoolNotificationSent) {
+            if (schoolDist <= 100) {
+              notifiedParents.add(parentKey + "_school");
               await sendPushNotification(
                 parent.expoPushToken,
                 "🏫 Reached School",
-                `${student.name}'s bus has safely reached the school.`,
-                { type: "school_reached", studentId: student._id }
+                `${student.name}'s bus has safely arrived at school.`,
+                { type: "school_reached", screen: "dashboard", studentId: student._id.toString() }
               );
               student.schoolNotificationSent = true;
               await student.save();
-              console.log(`🏫 School notification sent to ${parent.name}`);
+              console.log(`✅ School notification → ${parent.name}`);
             }
           }
-
-          // Pickup arrival notification (within 500m)
-          if (pickupDist <= 500 && !student.pickupNotificationSent) {
-            await sendPushNotification(
-              parent.expoPushToken,
-              "📍 Bus Arriving",
-              `${student.name}'s bus is ${Math.round(pickupDist)}m away — about ${eta} min.`,
-              { type: "bus_arriving", studentId: student._id }
-            );
-            student.pickupNotificationSent = true;
-            await student.save();
-            console.log(`✅ Pickup notification sent to ${parent.name}`);
-          }
         }
-      } catch (notifErr) {
-        console.log("Notification error (non-fatal):", notifErr.message);
+      } catch (e) {
+        console.log("Notification error (non-fatal):", e.message);
       }
     });
-
-    res.json({ message: "Location updated", bus });
 
   } catch (error) {
     console.log("update-location error:", error.message);
@@ -181,12 +224,11 @@ router.put("/update-location", authMiddleware, async (req, res) => {
 /* UPDATE BUS (admin) */
 router.put("/:id", authMiddleware, async (req, res) => {
   try {
-    const { busNo, route, status } = req.body;
     const bus = await Bus.findById(req.params.id);
     if (!bus) return res.status(404).json({ message: "Bus not found" });
-    bus.busNo  = busNo;
-    bus.route  = route;
-    bus.status = status;
+    bus.busNo  = req.body.busNo;
+    bus.route  = req.body.route;
+    bus.status = req.body.status;
     await bus.save();
     res.json(bus);
   } catch (error) {
@@ -204,26 +246,14 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-/* GET BUS BY BUS NUMBER */
+/* GET BUS BY BUS NUMBER */ 
 router.get("/busno/:busNo", async (req, res) => {
   try {
-    const bus = await Bus.findOne({
-      busNo: req.params.busNo,
-    });
-
-    if (!bus) {
-      return res.status(404).json({
-        message: "Bus not found",
-      });
-    }
-
+    const bus = await Bus.findOne({ busNo: req.params.busNo });
+    if (!bus) return res.status(404).json({ message: "Bus not found" });
     res.json(bus);
   } catch (error) {
-    console.error("Bus fetch error:", error);
-
-    res.status(500).json({
-      message: error.message,
-    });
+    res.status(500).json({ message: error.message });
   }
 });
 
