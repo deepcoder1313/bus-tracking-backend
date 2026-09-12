@@ -116,8 +116,11 @@ socket.on(
 
 // ---------------- TEST ROUTE ----------------
 
-app.get("/", (req, res) => {
-  res.send("🚍 Bus Tracking Backend Running");
+app.get("/api/health", (req, res) => {
+  res.status(200).json({
+    status: "ok",
+    message: "Bus Tracking Backend is running",
+  });
 });
 
 // ---------------- API ROUTES ----------------
