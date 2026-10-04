@@ -64,121 +64,232 @@ router.get("/", async (req, res) => {
 });
 
 // ── START TRIP ───────────────────────────────────────────
-router.post("/start", async (req, res) => {
-  console.log("🚀 /trips/start called", req.body);
+// ── START TRIP ───────────────────────────────────────────
+// ── START TRIP ───────────────────────────────────────────
+router.post("/start", authMiddleware, async (req, res) => {
+  console.log("🚀 /trips/start CALLED");
+  console.log("📦 BODY:", req.body);
+  console.log("👨‍✈️ DRIVER FROM TOKEN:", req.driver);
+
   try {
-    const { driverId, busNo, tripType = "morning" } = req.body;
+    const { driverId, busNo, tripType } = req.body;
 
-    if (!driverId || !busNo) {
-      return res.status(400).json({ message: "driverId and busNo required" });
-    }
-
-    // ✅ 6. Reset notification flags for fresh trip
-    await resetNotificationFlags(busNo);
-
-    // Create trip
-    const trip = new Trip({
+    console.log("🔍 START TRIP DATA:", {
       driverId,
       busNo,
-      startTime: new Date(),
       tripType,
-      status: "active",
     });
-    await trip.save();
 
-    // ✅ 1. Emit tripStarted to all socket clients (Parent App listens to this)
-    const io = req.app.get("io");
-    if (io) {
-      io.emit("tripStarted", {
-        tripId:    trip._id,
-        busNo:     trip.busNo,
-        driverId:  trip.driverId,
-        tripType:  trip.tripType,
-        startTime: trip.startTime,
+    if (!driverId || !busNo || !tripType) {
+      console.log("❌ Missing trip data");
+
+      return res.status(400).json({
+        message: "driverId, busNo and tripType are required",
       });
-      console.log(`📡 tripStarted emitted to ${io.sockets.sockets.size} clients`);
     }
 
-    res.status(201).json(trip);
+    // Check existing active trip
+    console.log("🔎 Checking active trip...");
 
-    // ✅ Send notifications after responding (non-blocking)
-    setImmediate(async () => {
-      try {
-        const isReturn = tripType === "return";
-        await notifyParents(
-          busNo,
-          isReturn ? "🏠 Return Trip Started" : "🚌 Bus Trip Started",
-          isReturn
-            ? `Bus ${busNo} has started the return journey home.`
-            : `Bus ${busNo} has started today's morning trip.`,
-          { type: isReturn ? "return_trip_started" : "trip_started", screen: "map" }
-        );
-      } catch (e) {
-        console.log("Trip start notification error:", e.message);
-      }
+    const existingTrip = await Trip.findOne({
+      driverId,
+      status: "active",
     });
 
+    console.log("🔎 EXISTING ACTIVE TRIP:", existingTrip);
+
+    if (existingTrip) {
+      console.log("❌ DRIVER ALREADY HAS ACTIVE TRIP");
+
+      return res.status(400).json({
+        message: "Driver already has an active trip",
+        tripId: existingTrip._id,
+      });
+    }
+
+    console.log("🆕 Creating new trip...");
+
+    const trip = await Trip.create({
+      driverId,
+      busNo,
+      tripType,
+      startTime: new Date(),
+      endTime: null,
+      duration: 0,
+      status: "active",
+    });
+
+    console.log("✅ NEW TRIP CREATED:", trip);
+
+    return res.status(201).json(trip);
+
   } catch (error) {
-    console.log("Start trip error:", error);
-    res.status(500).json({ message: error.message });
+    console.log("❌ START TRIP ERROR:", error);
+    console.log("❌ ERROR MESSAGE:", error.message);
+    console.log("❌ ERROR STACK:", error.stack);
+
+    return res.status(500).json({
+      message: error.message,
+    });
   }
 });
 
 // ── END TRIP ─────────────────────────────────────────────
+// ── END TRIP ─────────────────────────────────────────────
 router.put("/end", authMiddleware, async (req, res) => {
   console.log("🛑 /trips/end called, driver:", req.driver);
+  console.log("🎯 REQUEST BODY:", req.body);
+
   try {
     const driver = await Driver.findById(req.driver.id);
-    if (!driver) return res.status(404).json({ message: "Driver not found" });
 
-    const trip = await Trip.findOne({ driverId: driver._id, status: "active" });
-    if (!trip) return res.status(404).json({ message: "No active trip found" });
+    if (!driver) {
+      return res.status(404).json({
+        message: "Driver not found"
+      });
+    }
 
-    // End trip
-    trip.status   = "completed";
-    trip.endTime  = new Date();
-    trip.duration = Math.round((trip.endTime - trip.startTime) / 60000);
+    const { tripId } = req.body;
+
+    console.log("🎯 TRIP ID RECEIVED:", tripId);
+
+    let trip;
+
+    // ─────────────────────────────────────────────
+    // If frontend sends tripId, END THAT EXACT TRIP
+    // ─────────────────────────────────────────────
+    if (tripId) {
+      trip = await Trip.findOne({
+        _id: tripId,
+        driverId: driver._id,
+        status: "active"
+      });
+
+      console.log("🎯 TRIP FOUND BY ID:", trip?._id);
+    } 
+    
+    // ─────────────────────────────────────────────
+    // Fallback for old Driver App code
+    // ─────────────────────────────────────────────
+    else {
+      trip = await Trip.findOne({
+        driverId: driver._id,
+        status: "active"
+      }).sort({ startTime: -1 });
+
+      console.log("⚠️ NO TRIP ID PROVIDED");
+      console.log("🎯 USING LATEST ACTIVE TRIP:", trip?._id);
+    }
+
+    if (!trip) {
+      return res.status(404).json({
+        message: "No active trip found"
+      });
+    }
+
+    console.log("🎯 ENDING EXACT TRIP:", {
+      id: trip._id,
+      tripType: trip.tripType,
+      busNo: trip.busNo,
+      status: trip.status
+    });
+
+    // ─────────────────────────────────────────────
+    // END TRIP
+    // ─────────────────────────────────────────────
+
+    trip.status = "completed";
+    trip.endTime = new Date();
+
+    trip.duration = Math.round(
+      (trip.endTime - trip.startTime) / 60000
+    );
+
     await trip.save();
 
-    // Update bus status
-    const bus = await Bus.findOne({ busNo: driver.assignedBus });
+    // ─────────────────────────────────────────────
+    // UPDATE BUS
+    // ─────────────────────────────────────────────
+
+    const bus = await Bus.findOne({
+      busNo: driver.assignedBus
+    });
+
     if (bus) {
       bus.isOnline = false;
-      bus.speed    = 0;
+      bus.speed = 0;
+
       await bus.save();
     }
 
-    // ✅ 5. Emit tripEnded to all clients
+    // ─────────────────────────────────────────────
+    // SOCKET.IO
+    // ─────────────────────────────────────────────
+
     const io = req.app.get("io");
+
     if (io) {
       io.emit("tripEnded", {
-        busNo:    bus?.busNo ?? driver.assignedBus,
-        tripId:   trip._id,
-        duration: trip.duration,
+        busNo: bus?.busNo ?? driver.assignedBus,
+        tripId: trip._id,
+        tripType: trip.tripType,
+        duration: trip.duration
       });
-      console.log(`📡 tripEnded emitted to ${io.sockets.sockets.size} clients`);
+
+      console.log(
+        `📡 tripEnded emitted → ${io.sockets.sockets.size} clients`
+      );
     }
 
-    res.json({ message: "Trip ended successfully", trip });
+    // ─────────────────────────────────────────────
+    // RESPONSE
+    // ─────────────────────────────────────────────
 
-    // ✅ 5. Send trip ended notification (non-blocking)
+    console.log("✅ TRIP ENDED SUCCESSFULLY:", {
+      id: trip._id,
+      tripType: trip.tripType,
+      duration: trip.duration
+    });
+
+    res.json({
+      message: "Trip ended successfully",
+      trip
+    });
+
+    // ─────────────────────────────────────────────
+    // NOTIFICATION
+    // ─────────────────────────────────────────────
+
     setImmediate(async () => {
       try {
         const busNo = driver.assignedBus;
+
         await notifyParents(
           busNo,
           "🛑 Trip Ended",
-          `Bus ${busNo}'s trip has ended. Duration: ${trip.duration} min.`,
-          { type: "trip_ended", screen: "dashboard" }
+          `Bus ${busNo}'s ${trip.tripType} trip has ended. Duration: ${trip.duration} min.`,
+          {
+            type: "trip_ended",
+            screen: "dashboard",
+            tripType: trip.tripType
+          }
         );
+
       } catch (e) {
-        console.log("Trip end notification error:", e.message);
+        console.log(
+          "Trip end notification error:",
+          e.message
+        );
       }
     });
 
   } catch (error) {
-    console.log("End trip error:", error);
-    res.status(500).json({ message: error.message });
+
+    console.log("❌ END TRIP ERROR:", error);
+
+    res.status(500).json({
+      message: error.message
+    });
   }
 });
 
@@ -192,7 +303,17 @@ router.put("/stop/:id", async (req, res) => {
     trip.duration = Math.round((trip.endTime - trip.startTime) / 60000);
     trip.status   = "completed";
     await trip.save();
-
+    
+console.log("✅ TRIP SUCCESSFULLY COMPLETED:", {
+  tripId: trip._id,
+  driverId: trip.driverId,
+  busNo: trip.busNo,
+  tripType: trip.tripType,
+  status: trip.status,
+  startTime: trip.startTime,
+  endTime: trip.endTime,
+  duration: trip.duration,
+});
     res.json(trip);
   } catch (error) {
     res.status(500).json({ message: error.message });
