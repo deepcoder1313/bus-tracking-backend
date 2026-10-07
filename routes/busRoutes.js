@@ -83,6 +83,12 @@ const isSimulation =
     process.env.ALLOW_SIMULATION === "true" &&
     req.headers["x-simulation"] === "true";
 
+    const hasPreviousGPS =
+  bus.latitude != null &&
+  bus.longitude != null &&
+  bus.gpsTimestamp != null;
+  
+
 console.log("🧪 SIMULATION CHECK:", {
     allowSimulation: process.env.ALLOW_SIMULATION,
     header: req.headers["x-simulation"],
