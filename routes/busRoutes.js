@@ -68,16 +68,48 @@ router.put("/update-location", authMiddleware, async (req, res) => {
       return res.status(200).json({ message: "Ignored - old GPS packet" });
     }
 
+ // ── GPS jump protection ───────────────────────────────
+
+let calcSpeed = 0;
+
+// Only calculate GPS jump if we already have a valid
+// previous GPS location AND previous timestamp.
+//
+// First GPS point after starting tracking should always
+// establish the driver's current location.
+// ── GPS JUMP VALIDATION ─────────────────────────────
+
+const isSimulation =
+    process.env.ALLOW_SIMULATION === "true" &&
+    req.headers["x-simulation"] === "true";
+
+console.log("🧪 SIMULATION CHECK:", {
+    allowSimulation: process.env.ALLOW_SIMULATION,
+    header: req.headers["x-simulation"],
+    isSimulation,
+});
+
+if (hasPreviousGPS && !isSimulation) {
     const moveDist = getDistanceInMeters(
-      bus.latitude, bus.longitude, latitude, longitude
+        bus.latitude,
+        bus.longitude,
+        latitude,
+        longitude
     );
-    const timeDiff = (timestamp - (bus.gpsTimestamp || timestamp)) / 1000;
-    const calcSpeed = timeDiff > 0 ? (moveDist / timeDiff) * 3.6 : 0;
+
+    const timeDiff = (timestamp - bus.gpsTimestamp) / 1000;
+
+    const calcSpeed =
+        timeDiff > 0
+            ? (moveDist / timeDiff) * 3.6
+            : 0;
 
     if (calcSpeed > 120) {
-      console.log("❌ Impossible GPS jump ignored");
-      return res.status(200).json({ message: "Ignored - impossible GPS jump" });
+        return res.status(200).json({
+            message: "Ignored - impossible GPS jump"
+        });
     }
+}
 
     // ── Update bus ──────────────────────────────────────
     bus.latitude      = latitude;
