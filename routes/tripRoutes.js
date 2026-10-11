@@ -128,6 +128,24 @@ router.post("/start", authMiddleware, async (req, res) => {
     console.log("❌ ERROR MESSAGE:", error.message);
     console.log("❌ ERROR STACK:", error.stack);
 
+    const io = req.app.get("io");
+
+if (io) {
+  io.emit("tripStarted", {
+    busNo: trip.busNo,
+    tripId: trip._id,
+    tripType: trip.tripType,
+  });
+
+  console.log("🟢 tripStarted emitted:", {
+    busNo: trip.busNo,
+    tripId: trip._id,
+    tripType: trip.tripType,
+  });
+}
+
+return res.status(201).json(trip);
+
     return res.status(500).json({
       message: error.message,
     });
@@ -216,11 +234,16 @@ router.put("/end", authMiddleware, async (req, res) => {
     });
 
     if (bus) {
-      bus.isOnline = false;
-      bus.speed = 0;
-
-      await bus.save();
-    }
+     bus.gpsTimestamp = null;
+  bus.speed = 0;
+  bus.isOnline = false;
+  await bus.save();
+    
+    console.log("📍 GPS baseline reset for new trip:", {
+    busNo: bus.busNo,
+    tripType: trip.tripType
+  });
+}
 
     // ─────────────────────────────────────────────
     // SOCKET.IO
