@@ -8,19 +8,23 @@ const authMiddleware = (req, res, next) => {
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       console.log("❌ No Bearer token");
+
       return res.status(401).json({
         message: "No token provided",
       });
     }
 
-    const token = authHeader.split(" ")[1];
+    const token = authHeader.substring(7);
 
     console.log("🔑 TOKEN RECEIVED:", {
       exists: !!token,
       length: token?.length,
     });
 
-    console.log("🔐 JWT SECRET EXISTS:", !!process.env.JWT_SECRET);
+    console.log(
+      "🔐 JWT SECRET EXISTS:",
+      !!process.env.JWT_SECRET
+    );
 
     const decoded = jwt.verify(
       token,
@@ -39,7 +43,10 @@ const authMiddleware = (req, res, next) => {
     console.log("❌ JWT VERIFY MESSAGE:", error.message);
 
     return res.status(401).json({
-      message: "Invalid token",
+      message:
+        error.name === "TokenExpiredError"
+          ? "Token expired"
+          : "Invalid token",
     });
   }
 };

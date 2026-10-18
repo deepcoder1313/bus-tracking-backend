@@ -83,11 +83,10 @@ const isSimulation =
     process.env.ALLOW_SIMULATION === "true" &&
     req.headers["x-simulation"] === "true";
 
-    const hasPreviousGPS =
-  bus.latitude != null &&
-  bus.longitude != null &&
-  bus.gpsTimestamp != null;
-  
+const hasPreviousGPS =
+    bus.latitude != null &&
+    bus.longitude != null &&
+    bus.gpsTimestamp != null;
 
 console.log("🧪 SIMULATION CHECK:", {
     allowSimulation: process.env.ALLOW_SIMULATION,
@@ -288,10 +287,14 @@ router.delete("/:id", async (req, res) => {
 router.get("/busno/:busNo", async (req, res) => {
   try {
     const bus = await Bus.findOne({ busNo: req.params.busNo });
-    if (!bus) return res.status(404).json({ message: "Bus not found" });
-    res.json(bus);
+
+    if (!bus) {
+      return res.status(404).json({ message: "Bus not found" });
+    }
+
+    return res.json(bus);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 });
 
