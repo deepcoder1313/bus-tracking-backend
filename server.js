@@ -4,6 +4,7 @@ import http from "http";
 import { Server } from "socket.io";
 
 import cors from "cors";
+import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 
 import connectDB from "./config/db.js";
@@ -86,29 +87,59 @@ const io = new Server(server, {
 app.set("io", io);
 
 // Listen for client connections
-io.on("connection", (socket) => {
+// Authenticate Socket.IO connections using the JWT.
+io.use((socket, next) => {
+  try {
+    if (!process.env.JWT_SECRET) {
+      return next(new Error("Server authentication configuration error"));
+    }
 
-  
-  console.log("✅ Client Connected:", socket.id);
+    const token = socket.handshake.auth?.token;
+
+    if (typeof token !== "string" || !token.trim()) {
+      return next(new Error("Authentication required"));
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    if (
+      !decoded.id ||
+      !["parent", "driver", "admin"].includes(decoded.role)
+    ) {
+      return next(new Error("Invalid socket credentials"));
+    }
+
+    socket.data.user = {
+      id: String(decoded.id),
+      role: decoded.role,
+    };
+
+    next();
+  } catch {
+    next(new Error("Invalid or expired token"));
+  }
+});
+
+io.on("connection", (socket) => {
+  const user = socket.data.user;
+
+  console.log(`Authenticated socket connected: ${user.role}`);
+
+  // A parent can join only their own room.
+  if (user.role === "parent") {
+    socket.join(`parent_${user.id}`);
+  }
 
   socket.on("disconnect", () => {
-    console.log("❌ Client Disconnected:", socket.id);
+    console.log(`Socket disconnected: ${user.role}`);
   });
-socket.on(
-    "joinParentRoom",
-    (parentId)=>{
 
-        socket.join(
-            `parent_${parentId}`
-        );
-
-        console.log(
-            `✅ Parent Joined Room: parent_${parentId}`
-        );
-
+  // Do not accept arbitrary parent IDs from clients.
+  socket.on("joinParentRoom", () => {
+    if (user.role === "parent") {
+      socket.join(`parent_${user.id}`);
     }
-);
-
+  });
 });
 
 // ---------------- MIDDLEWARE ----------------

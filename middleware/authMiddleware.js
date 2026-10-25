@@ -1,47 +1,43 @@
+
 import jwt from "jsonwebtoken";
 
 const authMiddleware = (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
 
-    console.log("🔐 AUTH HEADER:", authHeader);
-
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      console.log("❌ No Bearer token");
-
+    if (!authHeader?.startsWith("Bearer ")) {
       return res.status(401).json({
         message: "No token provided",
       });
     }
 
-    const token = authHeader.substring(7);
+    if (!process.env.JWT_SECRET) {
+      console.error("JWT_SECRET is not configured");
 
-    console.log("🔑 TOKEN RECEIVED:", {
-      exists: !!token,
-      length: token?.length,
-    });
+      return res.status(500).json({
+        message: "Server configuration error",
+      });
+    }
 
-    console.log(
-      "🔐 JWT SECRET EXISTS:",
-      !!process.env.JWT_SECRET
-    );
+    const token = authHeader.slice(7).trim();
 
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET
-    );
+    if (!token) {
+      return res.status(401).json({
+        message: "Invalid token",
+      });
+    }
 
-    console.log("✅ JWT VERIFIED:", decoded);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    if (decoded.role !== "driver" || !decoded.id) {
+      return res.status(403).json({
+        message: "Driver access required",
+      });
+    }
 
     req.driver = decoded;
-
     next();
-
   } catch (error) {
-
-    console.log("❌ JWT VERIFY ERROR:", error.name);
-    console.log("❌ JWT VERIFY MESSAGE:", error.message);
-
     return res.status(401).json({
       message:
         error.name === "TokenExpiredError"

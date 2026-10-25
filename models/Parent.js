@@ -34,10 +34,32 @@ const parentSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+
+    resetPasswordTokenHash: {
+      type: String,
+      default: undefined,
+      select: false,
+    },
+
+    resetPasswordExpires: {
+      type: Date,
+      default: undefined,
+      select: false,
+    },
+
+    passwordResetTokenHash: {
+  type: String,
+  select: false,
+},
+passwordResetExpiresAt: {
+  type: Date,
+  select: false,
+},
+
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 // Hash password before saving

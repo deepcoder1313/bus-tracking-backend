@@ -1,5 +1,6 @@
 import express from "express";
 import Route from "../models/Route.js";
+import adminAuth from "../middleware/adminAuth.js";
 
 const router = express.Router();
 
@@ -20,7 +21,7 @@ router.get("/", async (req, res) => {
 
 
 router.post("/", async (req, res) => {
-  console.log("REQ BODY:", req.body);
+ 
 
   try {
     const newRoute = new Route({
@@ -58,7 +59,7 @@ router.post("/", async (req, res) => {
 // UPDATE ROUTE
 
 router.put("/:id", async (req, res) => {
-  console.log("REQ BODY:", req.body);
+ 
   try {
     const updatedRoute = await Route.findByIdAndUpdate(
       req.params.id,

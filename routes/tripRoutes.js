@@ -6,6 +6,7 @@ import Parent  from "../models/Parent.js";
 import Driver  from "../models/Driver.js";
 import Bus     from "../models/Bus.js";
 import authMiddleware from "../middleware/authMiddleware.js";
+import adminAuth from "../middleware/adminAuth.js";
 import { sendPushNotification } from "../services/notificationService.js";
 
 const router = express.Router();
@@ -52,7 +53,7 @@ async function notifyParents(busNo, title, body, data = {}) {
 }
 
 // ── GET ALL TRIPS ────────────────────────────────────────
-router.get("/", async (req, res) => {
+router.get("/", adminAuth, async (req, res) => {
   try {
     const trips = await Trip.find()
       .populate("driverId")
@@ -66,49 +67,49 @@ router.get("/", async (req, res) => {
 // ── START TRIP ───────────────────────────────────────────
 // ── START TRIP ───────────────────────────────────────────
 // ── START TRIP ───────────────────────────────────────────
+
 router.post("/start", authMiddleware, async (req, res) => {
-  console.log("🚀 /trips/start CALLED");
-  console.log("📦 BODY:", req.body);
-  console.log("👨‍✈️ DRIVER FROM TOKEN:", req.driver);
-
   try {
-    const { driverId, busNo, tripType } = req.body;
+    const { busNo, tripType } = req.body;
+    const driverId = req.driver.id;
 
-    console.log("🔍 START TRIP DATA:", {
-      driverId,
-      busNo,
-      tripType,
-    });
-
-    if (!driverId || !busNo || !tripType) {
-      console.log("❌ Missing trip data");
-
+    // Validate required fields first
+    if (!busNo || !tripType) {
       return res.status(400).json({
-        message: "driverId, busNo and tripType are required",
+        message: "busNo and tripType are required",
       });
     }
 
-    // Check existing active trip
-    console.log("🔎 Checking active trip...");
+    // Verify authenticated driver
+    const driver = await Driver.findById(driverId);
 
+    if (!driver) {
+      return res.status(404).json({
+        message: "Driver not found",
+      });
+    }
+
+    // Verify assigned bus
+    if (String(driver.assignedBus) !== String(busNo)) {
+      return res.status(403).json({
+        message: "You can only start a trip for your assigned bus",
+      });
+    }
+
+    // Prevent duplicate active trips for this driver
     const existingTrip = await Trip.findOne({
       driverId,
       status: "active",
     });
 
-    console.log("🔎 EXISTING ACTIVE TRIP:", existingTrip);
-
     if (existingTrip) {
-      console.log("❌ DRIVER ALREADY HAS ACTIVE TRIP");
-
       return res.status(400).json({
         message: "Driver already has an active trip",
         tripId: existingTrip._id,
       });
     }
 
-    console.log("🆕 Creating new trip...");
-
+    // Create trip
     const trip = await Trip.create({
       driverId,
       busNo,
@@ -119,44 +120,32 @@ router.post("/start", authMiddleware, async (req, res) => {
       status: "active",
     });
 
-    console.log("✅ NEW TRIP CREATED:", trip);
-
-    return res.status(201).json(trip);
-
-  } catch (error) {
-    console.log("❌ START TRIP ERROR:", error);
-    console.log("❌ ERROR MESSAGE:", error.message);
-    console.log("❌ ERROR STACK:", error.stack);
-
+    // Notify connected clients only after successful creation
     const io = req.app.get("io");
 
-if (io) {
-  io.emit("tripStarted", {
-    busNo: trip.busNo,
-    tripId: trip._id,
-    tripType: trip.tripType,
-  });
+    if (io) {
+      io.emit("tripStarted", {
+        busNo: trip.busNo,
+        tripId: trip._id,
+        tripType: trip.tripType,
+      });
+    }
 
-  console.log("🟢 tripStarted emitted:", {
-    busNo: trip.busNo,
-    tripId: trip._id,
-    tripType: trip.tripType,
-  });
-}
-
-return res.status(201).json(trip);
+    return res.status(201).json(trip);
+  } catch (error) {
+    console.error("Start trip failed:", error.message);
 
     return res.status(500).json({
-      message: error.message,
+      message: "Unable to start trip",
     });
   }
 });
 
+
 // ── END TRIP ─────────────────────────────────────────────
 // ── END TRIP ─────────────────────────────────────────────
 router.put("/end", authMiddleware, async (req, res) => {
-  console.log("🛑 /trips/end called, driver:", req.driver);
-  console.log("🎯 REQUEST BODY:", req.body);
+  
 
   try {
     const driver = await Driver.findById(req.driver.id);
@@ -169,7 +158,7 @@ router.put("/end", authMiddleware, async (req, res) => {
 
     const { tripId } = req.body;
 
-    console.log("🎯 TRIP ID RECEIVED:", tripId);
+  
 
     let trip;
 
@@ -183,7 +172,7 @@ router.put("/end", authMiddleware, async (req, res) => {
         status: "active"
       });
 
-      console.log("🎯 TRIP FOUND BY ID:", trip?._id);
+     
     } 
     
     // ─────────────────────────────────────────────
@@ -195,8 +184,7 @@ router.put("/end", authMiddleware, async (req, res) => {
         status: "active"
       }).sort({ startTime: -1 });
 
-      console.log("⚠️ NO TRIP ID PROVIDED");
-      console.log("🎯 USING LATEST ACTIVE TRIP:", trip?._id);
+   
     }
 
     if (!trip) {
@@ -205,12 +193,7 @@ router.put("/end", authMiddleware, async (req, res) => {
       });
     }
 
-    console.log("🎯 ENDING EXACT TRIP:", {
-      id: trip._id,
-      tripType: trip.tripType,
-      busNo: trip.busNo,
-      status: trip.status
-    });
+
 
     // ─────────────────────────────────────────────
     // END TRIP
@@ -239,10 +222,7 @@ router.put("/end", authMiddleware, async (req, res) => {
   bus.isOnline = false;
   await bus.save();
     
-    console.log("📍 GPS baseline reset for new trip:", {
-    busNo: bus.busNo,
-    tripType: trip.tripType
-  });
+    
 }
 
     // ─────────────────────────────────────────────
@@ -259,20 +239,14 @@ router.put("/end", authMiddleware, async (req, res) => {
         duration: trip.duration
       });
 
-      console.log(
-        `📡 tripEnded emitted → ${io.sockets.sockets.size} clients`
-      );
+    
     }
 
     // ─────────────────────────────────────────────
     // RESPONSE
     // ─────────────────────────────────────────────
 
-    console.log("✅ TRIP ENDED SUCCESSFULLY:", {
-      id: trip._id,
-      tripType: trip.tripType,
-      duration: trip.duration
-    });
+    
 
     res.json({
       message: "Trip ended successfully",
@@ -306,21 +280,32 @@ router.put("/end", authMiddleware, async (req, res) => {
       }
     });
 
-  } catch (error) {
+ } catch (error) {
+  console.error("End trip failed:", error.message);
 
-    console.log("❌ END TRIP ERROR:", error);
-
-    res.status(500).json({
-      message: error.message
-    });
-  }
+  return res.status(500).json({
+    message: "Unable to end trip",
+  });
+}
 });
 
 // ── STOP TRIP (old route kept for Driver App compatibility) ─
-router.put("/stop/:id", async (req, res) => {
+router.put("/stop/:id", authMiddleware, async (req, res) => {
   try {
     const trip = await Trip.findById(req.params.id);
     if (!trip) return res.status(404).json({ message: "Trip not found" });
+
+    if (String(trip.driverId) !== String(req.driver.id)) {
+  return res.status(403).json({
+    message: "You can only end your own trip",
+  });
+}
+
+if (trip.status !== "active") {
+  return res.status(400).json({
+    message: "Trip is not active",
+  });
+}
 
     trip.endTime  = new Date();
     trip.duration = Math.round((trip.endTime - trip.startTime) / 60000);

@@ -1,3 +1,9 @@
 {"_e":"root:init","_t":1783058256857,"format":"v0-jsonl","version":"56.1.16"}
 {"_e":"env:mode","_t":1783058256859,"nodeEnv":"development","babelEnv":"development","mode":"development"}
 {"_e":"env:load","_t":1783058256868,"mode":"development","files":["../..\\..\\.env"],"env":{"JWT_SECRET":"BusTracking2026SecretKey@123","MONGO_URI":"mongodb+srv://jaspalshubh12_db_user:BusTracking123@cluster0.itcz3ae.mongodb.net/bus_tracking?retryWrites=true&w=majority&appName=Cluster0","PORT":"5000"}}
+{"_e":"root:init","_t":1789554752658,"format":"v0-jsonl","version":"56.1.16"}
+{"_e":"env:mode","_t":1789554752673,"nodeEnv":"development","babelEnv":"development","mode":"development"}
+{"_e":"env:load","_t":1789554752703,"mode":"development","files":["../..\\..\\.env"],"env":{"GOOGLE_MAPS_API_KEY":"AIzaSyAfDRRyVLHKE4Ewz0B3y3wtk0ful4wD02w","JWT_SECRET":"BusTracking2026SecretKey@123","MONGO_URI":"mongodb+srv://jaspalshubh12_db_user:BusTracking123@cluster0.itcz3ae.mongodb.net/bus_tracking?retryWrites=true&w=majority&appName=Cluster0","PORT":"5000"}}
+{"_e":"devserver:start","_t":1789615930287,"mode":"development","web":true,"baseUrl":"","asyncRoutes":false,"routerRoot":"../..\\..\\app","serverComponents":false,"serverActions":false,"serverRendering":false,"apiRoutes":false,"exporting":false}
+{"_e":"metro:config","_t":1789615937004,"serverRoot":"../..\\..","projectRoot":"../..\\..","exporting":false,"flags":{"autolinkingModuleResolution":false,"serverActions":false,"serverComponents":false,"reactCompiler":false,"optimizeGraph":false,"treeshaking":false,"logbox":false}}
+{"_e":"metro:instantiate","_t":1789615943138,"atlas":false,"workers":8,"host":"::","port":8083}

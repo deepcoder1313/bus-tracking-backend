@@ -8,7 +8,14 @@ import Parent  from "../models/Parent.js";
 import Route   from "../models/Route.js";
 import { getDistance } from "../utils/distance.js";
 import { getETA }      from "../utils/eta.js";
+import adminAuth from "../middleware/adminAuth.js";
 import { sendPushNotification } from "../services/notificationService.js";
+import parentAuth from "../middleware/parentAuth.js";
+import jwt from "jsonwebtoken";
+
+
+
+
 
 const router = express.Router();
 
@@ -24,8 +31,7 @@ function getDistanceInMeters(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-/* GET ALL BUSES */
-router.get("/", async (req, res) => {
+router.get("/", adminAuth, async (req, res) => {
   try {
     const buses = await Bus.find();
     res.json(buses);
@@ -35,7 +41,7 @@ router.get("/", async (req, res) => {
 });
 
 /* ADD BUS */
-router.post("/", authMiddleware, async (req, res) => {
+router.post("/", adminAuth, async (req, res) => {
   try {
     const newBus = new Bus({
       busNo:  req.body.busNo,
@@ -259,7 +265,7 @@ console.log("📍 PICKUP ETA:", {
 });
 
 /* UPDATE BUS (admin) */
-router.put("/:id", authMiddleware, async (req, res) => {
+router.put("/:id", adminAuth, async (req, res) => {
   try {
     const bus = await Bus.findById(req.params.id);
     if (!bus) return res.status(404).json({ message: "Bus not found" });
@@ -274,7 +280,7 @@ router.put("/:id", authMiddleware, async (req, res) => {
 });
 
 /* DELETE BUS */
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", adminAuth, async (req, res) => {
   try {
     await Bus.findByIdAndDelete(req.params.id);
     res.json({ message: "Bus Deleted Successfully" });
@@ -284,18 +290,115 @@ router.delete("/:id", async (req, res) => {
 });
 
 /* GET BUS BY BUS NUMBER */ 
+
+/* GET BUS BY BUS NUMBER — AUTHORIZED USERS ONLY */
+
+/* GET BUS BY BUS NUMBER — AUTHENTICATED AND AUTHORIZED */
+
+/* GET BUS BY BUS NUMBER */
+
+/* GET BUS BY BUS NUMBER — authenticated access only */
 router.get("/busno/:busNo", async (req, res) => {
   try {
-    const bus = await Bus.findOne({ busNo: req.params.busNo });
+    const authHeader = req.headers.authorization;
 
-    if (!bus) {
-      return res.status(404).json({ message: "Bus not found" });
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({
+        message: "Authentication required",
+      });
     }
 
+    if (!process.env.JWT_SECRET) {
+      return res.status(500).json({
+        message: "Server authentication configuration error",
+      });
+    }
+
+    const token = authHeader.slice(7).trim();
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    if (!decoded.id || !decoded.role) {
+      return res.status(403).json({
+        message: "Invalid user credentials",
+      });
+    }
+
+    const requestedBusNo = req.params.busNo;
+    let allowedBusNo = null;
+
+    if (decoded.role === "admin") {
+      allowedBusNo = requestedBusNo;
+    } else if (decoded.role === "driver") {
+      const driver = await Driver.findById(decoded.id)
+        .select("assignedBus");
+
+      if (!driver) {
+        return res.status(403).json({
+          message: "Driver account not found",
+        });
+      }
+
+      allowedBusNo = driver.assignedBus;
+    } else if (decoded.role === "parent") {
+      const parent = await Parent.findById(decoded.id)
+        .select("studentId");
+
+      if (!parent || !parent.studentId) {
+        return res.status(403).json({
+          message: "No student is linked to this parent",
+        });
+      }
+
+      const student = await Student.findById(parent.studentId)
+        .select("assignedBus");
+
+      if (!student || !student.assignedBus) {
+        return res.status(403).json({
+          message: "No bus is assigned to this student",
+        });
+      }
+
+      allowedBusNo = student.assignedBus;
+    } else {
+      return res.status(403).json({
+        message: "Access denied",
+      });
+    }
+
+    if (String(allowedBusNo) !== String(requestedBusNo)) {
+      return res.status(403).json({
+        message: "You are not authorized to access this bus",
+      });
+    }
+
+    const bus = await Bus.findOne({ busNo: requestedBusNo });
+
+    if (!bus) {
+      return res.status(404).json({
+        message: "Bus not found",
+      });
+    }
+
+    // Preserve the existing GPS data.
     return res.json(bus);
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    if (
+      error.name === "JsonWebTokenError" ||
+      error.name === "TokenExpiredError"
+    ) {
+      return res.status(401).json({
+        message: "Invalid or expired token",
+      });
+    }
+
+    console.error("Bus lookup error:", error.message);
+
+    return res.status(500).json({
+      message: "Unable to retrieve bus information",
+    });
   }
 });
+
+
 
 export default router;

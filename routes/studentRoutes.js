@@ -1,7 +1,7 @@
 // routes/studentRoutes.js
 import express from "express";
 import Student from "../models/Student.js";
-
+import adminAuth from "../middleware/adminAuth.js";
 const router = express.Router();
 
 // GET ALL STUDENTS
@@ -18,7 +18,7 @@ router.get("/", async (req, res) => {
 
 // ADD STUDENT  ← FIX: now saves pickupLatitude + pickupLongitude
 router.post("/", async (req, res) => {
-  console.log("📥 Incoming Body:", req.body);
+
   try {
     const student = new Student({
   name: req.body.name,

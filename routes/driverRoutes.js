@@ -1,6 +1,7 @@
   import bcrypt from "bcryptjs";
   import express from "express";
   import jwt from "jsonwebtoken";
+  import adminAuth from "../middleware/adminAuth.js";
   import Driver from "../models/Driver.js";
 
   const router = express.Router();
@@ -29,11 +30,15 @@
         email: req.body.email,
         password: hashedPassword,
       });
+const savedDriver = await newDriver.save();
 
-      const savedDriver = await newDriver.save();
-      
+const driverResponse = savedDriver.toObject();
+delete driverResponse.password;
 
-      res.status(201).json(savedDriver);
+return res.status(201).json(driverResponse);
+    
+
+     
     } catch (error) {
       res.status(400).json({
         message: error.message,
@@ -44,56 +49,79 @@
 
   // DRIVER LOGIN
 
-  router.post("/login", async (req, res) => {
-    console.log("Login request received");
-    console.log(req.body);
 
-    try {
-      const { email, password } = req.body;
+router.post("/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
 
-      console.log("Searching email:", email);
-
-      const driver = await Driver.findOne({ email });
-
-      console.log("Driver found:", driver);
-
-      if (!driver) {
-        return res.status(401).json({
-          message: "Invalid Email or Password",
-        });
-      }
-
-      const isMatch = await bcrypt.compare(password, driver.password);
-
-      console.log("Entered password:", password);
-      console.log("Stored password:", driver.password);
-      console.log("Password Match:", isMatch);
-
-      if (!isMatch) {
-        return res.status(401).json({
-          message: "Invalid Email or Password",
-        });
-      }
-
-      const token = jwt.sign(
-        { id: driver._id },
-        process.env.JWT_SECRET,
-        { expiresIn: "7d" }
-      );
-
-      const driverObj = driver.toObject();
-      delete driverObj.password;
-
-      res.json({
-        message: "Login Successful",
-        token,
-        driver: driverObj,
+    if (
+      typeof email !== "string" ||
+      typeof password !== "string" ||
+      !email.trim() ||
+      !password
+    ) {
+      return res.status(400).json({
+        message: "Email and password are required",
       });
-    } catch (error) {
-      console.log(error);
-      res.status(500).json({ message: error.message });
     }
-  });
+
+ const normalizedEmail = email.trim();
+
+const driver = await Driver.findOne({
+  email: {
+    $regex: `^${normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
+    $options: "i",
+  },
+});
+
+console.log("Driver login lookup:", {
+  emailNormalized: normalizedEmail,
+  driverFound: !!driver,
+});
+
+    if (!driver) {
+      return res.status(401).json({
+        message: "Invalid Email or Password",
+      });
+    }
+
+    const isMatch = await bcrypt.compare(
+      password,
+      driver.password
+    );
+
+    if (!isMatch) {
+      return res.status(401).json({
+        message: "Invalid Email or Password",
+      });
+    }
+
+    const token = jwt.sign(
+  {
+    id: driver._id.toString(),
+    role: "driver",
+  },
+  process.env.JWT_SECRET,
+  { expiresIn: "7d" }
+);
+
+    const driverObj = driver.toObject();
+    delete driverObj.password;
+
+    return res.json({
+      message: "Login Successful",
+      token,
+      driver: driverObj,
+    });
+  } catch (error) {
+    console.error("Driver login failed:", error.message);
+
+    return res.status(500).json({
+      message: "Internal server error",
+    });
+  }
+});
+
 
   router.put("/:id/password", async (req, res) => {
     try {
